@@ -1,0 +1,24 @@
+version: '3'
+services:
+  redroid:
+    stdin_open: true
+    tty: true
+    privileged: true
+    volumes:
+      - ./data:/data
+    ports:
+      - 5555:5555
+    command:
+      - androidboot.redroid_fps=30
+      - androidboot.use_memfd=true
+      - androidboot.hardware=mt6891
+      - ro.boot.hwc=GLOBAL
+      - ro.ril.oem.imei=865948069902280
+      - ro.ril.oem.imei1=865948069902280
+      - ro.ril.oem.imei2=865948069902281
+      - ro.ril.miui.imei0=865948069902281
+      - ro.product.manufacturer=Xiaomi
+      - ro.build.product=zeus
+      - ro.config.low_ram=true
+    container_name: redroid
+    image: ${IMAGETAG:-redroid/redroid:11.0.0-latest}

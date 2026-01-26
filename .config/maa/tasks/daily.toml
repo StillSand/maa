@@ -1,0 +1,44 @@
+[[tasks]]
+name = "开始唤醒"
+type = "StartUp"
+params = { client_type = "Official", start_game_enabled = true }
+
+[[tasks]]
+name = "公开招募"
+type = "Recruit"
+params = { refresh = true, select = [1, 3, 4, 5], confirm = [1, 3, 4, 5], times = 4, recruitment_time = { 3 = 460, 4 = 540, 5 = 540 }, skip_robot = false }
+
+[[tasks]]
+name = "自动战斗"
+type = "Fight"
+
+[[tasks.variants]]
+condition = { type = "Weekday", weekdays = [ "Mon" ] }
+params = { stage = "Annihilation", client_type = "Official", expiring_medicine = 999 }
+
+[[tasks.variants]]
+params = { stage = "1-7", series = 6, client_type = "Official", expiring_medicine = 999 }
+
+[[tasks]]
+name = "自动战斗"
+type = "Fight"
+params = { stage = "1-7", client_type = "Official", expiring_medicine = 999 }
+
+[[tasks]]
+name = "基建换班"
+type = "Infrast"
+params = { mode = 0, facility = ["Office", "Mfg", "Trade", "Control", "Power", "Reception", "Dorm"], drones = "Money", threshold = 0.3, replenish = true, dorm_notstationed_enabled = true }
+
+[[tasks]]
+name = "信用商店"
+type = "Mall"
+params = { shopping = true, buy_first = ["固源岩", "招聘许可", "技巧概要", "家具"], blacklist = ["碳", "加急许可"], force_shopping_if_credit_full = true, reserve_max_credit = true }
+
+[[tasks]]
+name = "领取奖励"
+type = "Award"
+params = { award = true, mail = true, recruit = false, orundum = true, mining = true, specialaccess = true }
+
+[[tasks]]
+name = "关闭游戏"
+type = "CloseDown"

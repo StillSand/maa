@@ -1,0 +1,172 @@
+name: MAA
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_run:
+        description: 'Run'
+        required: false
+        default: false
+        type: boolean
+      manual_update:
+        description: 'Update manually'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 定时运行，按照UTC时区配置，示例为每天4点和16点运行
+    - cron: '0 8,20 * * *'
+
+env:
+  TZ: Asia/Shanghai
+  # 客户端版本
+  CLIENT_TYPE: Official
+  # 是否在结束后发送简报到QQ
+  SEND_MSG: false
+
+jobs:
+  maa:
+    name: MAA
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Prepare for environment
+        run: |
+          df -h
+          sudo apt update
+          sudo apt install linux-modules-extra-`uname -r` python3-requests python3-toml adb -y
+          sudo modprobe binder_linux devices="binder,hwbinder,vndbinder"
+          pip3 install docker-squash
+
+      - uses: actions/checkout@v4
+
+      - name: Restore container
+        if: github.event.inputs.manual_update != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ./ark.tar
+            ./data.tar
+          key: redroid-
+
+      - name: Setup Debug Session
+        if: github.event.inputs.manual_update == 'true' 
+        uses: mxschmitt/action-tmate@v3
+        with:
+          detached: true
+
+      - name: Setup redroid
+        env:
+          MAX_ATTEMPTS: 60
+        run: |
+          if [[ -f ./ark.tar ]] && [[ -f ./data.tar ]];then
+            echo "Start loading container"
+            docker load -i ./ark.tar
+            sudo rm ./ark.tar
+            export IMAGETAG=ark
+            sudo tar -xf ./data.tar
+            sudo rm ./data.tar
+          fi
+          docker compose up -d
+
+          export attempt=0
+          while [[ $attempt -lt $MAX_ATTEMPTS ]]; do
+            adb kill-server && adb connect 127.0.0.1:5555
+            if [[ $(adb -s 127.0.0.1:5555 shell getprop sys.boot_completed 2>/dev/null || :) == "1" ]];then break;fi
+            export attempt=$((attempt + 1))
+            echo "Waiting for container to be ready (attempt $attempt/$MAX_ATTEMPTS)..." && sleep 1
+          done
+          if [[ $attempt -eq $MAX_ATTEMPTS ]]; then
+            echo "Container failed to become ready within timeout" && exit 1
+          else
+            echo "Container is ready"
+          fi
+
+      - name: Setup Frp && ws-scrcpy
+        if: github.event_name != 'schedule'
+        run: |
+          docker run -d --net host --name sakurafrp natfrp/frpc -f ${{ secrets.FRPC_TOKEN }}
+          docker run --name ws-scrcpy -d --add-host=host.docker.internal:host-gateway -p 8000:8000 haris132/ws-scrcpy
+          docker exec ws-scrcpy adb connect host.docker.internal:5555
+
+      - name: Install MAA
+        run: |
+          wget https://github.com/MaaAssistantArknights/maa-cli/releases/download/v0.6.0/maa_cli-v0.6.0-aarch64-unknown-linux-gnu.tar.gz
+          tar -vzxf maa_cli-v0.6.0-aarch64-unknown-linux-gnu.tar.gz
+          mv maa /usr/local/bin
+          chmod +x /usr/local/bin/maa
+          cp -r .config ~
+          maa self update
+          maa install
+          maa update
+
+      - name: Install game
+        run: |
+          python3 download.py ${{ env.CLIENT_TYPE }}
+          adb kill-server && adb connect 127.0.0.1:5555 && adb devices
+          adb -s 127.0.0.1:5555 install arknights.apk && rm arknights.apk
+
+      - name: Manual update
+        if: github.event.inputs.manual_update == 'true'
+        timeout-minutes: 60
+        run: |
+          cp create_flag /usr/local/bin
+          chmod +x /usr/local/bin/create_flag
+          while true;do
+            if [[ -f ~/flag_update_completed ]];then
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Run MAA
+        if: github.event_name == 'schedule' || github.event.inputs.confirm_run == 'true'
+        env:
+          MAA_LOG: trace
+        run: python3 run.py
+
+      - name: Send message
+        if:  ( github.event_name == 'schedule' || github.event.inputs.confirm_run == 'true' ) && env.SEND_MSG == 'true'
+        env:
+          ONEBOT_URL: ${{ secrets.ONEBOT_URL }}
+          QQID: ${{ secrets.QQID }}
+        run: |
+          python3 send_msg.py
+          cat msg
+
+      - name: Upload log
+        uses: actions/upload-artifact@v4
+        if:  always()
+        with:
+          name: log
+          path: asst.log
+          if-no-files-found: ignore
+
+      - name: Export container
+        run: |
+          adb kill-server && adb connect 127.0.0.1:5555 && adb devices
+          adb -s 127.0.0.1:5555 shell cmd package uninstall -k com.hypergryph.arknights
+          docker stop redroid
+          docker commit redroid ark
+          docker rm redroid
+          docker rmi redroid/redroid:11.0.0-latest 2>/dev/null || :
+          echo "Start squashing container"
+          docker-squash -t ark ark
+          echo "Start saving container"
+          docker save ark -o ./ark.tar
+          echo "Saved container"
+          docker rmi ark
+          echo "Start saving data"
+          sudo tar -cpf ./data.tar data
+          sudo rm -rf data
+
+      - name: Generate cache key
+        run: du ./ark.tar ./data.tar | cut -f 1 | tee container.size
+
+      - name: Upload container
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ./ark.tar
+            ./data.tar
+          key: redroid-${{ hashFiles('container.size') }}

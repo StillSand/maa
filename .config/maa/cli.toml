@@ -1,0 +1,13 @@
+[core]
+channel = "Beta"
+test_time = 0
+api_url = "https://github.com/MaaAssistantArknights/MaaRelease/raw/main/MaaAssistantArknights/api/version/"
+
+[resource]
+auto_update = false
+
+[resource.remote]
+url = "https://github.com/MaaAssistantArknights/MaaResource.git"
+
+[cli]
+channel = "Beta"
