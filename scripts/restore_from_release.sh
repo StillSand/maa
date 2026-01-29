@@ -159,31 +159,18 @@ download_release_files() {
     log_info "下载备份文件..."
     
     # 清理旧的下载文件
-    rm -f container.7z.* container.enc.* 2>/dev/null || true
+    rm -f container.enc.* 2>/dev/null || true
     
     # 获取文件列表和总数
     log_info "获取文件列表..."
     
-    # 检测备份格式
-    if gh release view "$release_tag" --json assets --jq '.assets[].name' | grep -q "container.enc."; then
-        FILE_PATTERN="container.enc."
-        BACKUP_FORMAT="openssl"
-        log_info "检测到 OpenSSL 加密格式（新格式）"
-    elif gh release view "$release_tag" --json assets --jq '.assets[].name' | grep -q "container.7z."; then
-        FILE_PATTERN="container.7z."
-        BACKUP_FORMAT="7z"
-        log_info "检测到 7z 加密格式（旧格式）"
-        # 检查并安装 7z
-        if ! command -v 7z &> /dev/null; then
-            log_warning "7z 未安装，正在安装..."
-            sudo apt update > /dev/null 2>&1
-            sudo apt install -y p7zip-full > /dev/null 2>&1
-            log_success "7z 安装完成"
-        fi
-    else
-        log_error "未找到支持的备份格式"
+    # 检查备份文件
+    if ! gh release view "$release_tag" --json assets --jq '.assets[].name' | grep -q "container.enc."; then
+        log_error "未找到备份文件（container.enc.*）"
         exit 1
     fi
+    
+    FILE_PATTERN="container.enc."
     
     FILE_LIST=$(gh release view "$release_tag" --json assets --jq '.assets[].name' | grep "$FILE_PATTERN")
     TOTAL_FILES=$(echo "$FILE_LIST" | wc -l)
@@ -243,16 +230,9 @@ download_release_files() {
     echo ""
     
     # 检查是否下载成功
-    if [ "$BACKUP_FORMAT" = "openssl" ]; then
-        if [ ! -f "container.enc.000" ]; then
-            log_error "下载失败，未找到 container.enc.000"
-            exit 1
-        fi
-    else
-        if [ ! -f "container.7z.001" ]; then
-            log_error "下载失败，未找到 container.7z.001"
-            exit 1
-        fi
+    if [ ! -f "container.enc.000" ]; then
+        log_error "下载失败，未找到 container.enc.000"
+        exit 1
     fi
     
     # 统计下载的文件
@@ -273,51 +253,34 @@ extract_and_decrypt() {
     # 清理旧的解压文件
     rm -f ark.tar data.tar 2>/dev/null || true
     
-    if [ "$BACKUP_FORMAT" = "openssl" ]; then
-        # OpenSSL 格式（新格式）
-        log_info "使用 OpenSSL 解密（这可能需要 2-5 分钟）..."
+    log_info "使用 OpenSSL 解密（这可能需要 2-5 分钟）..."
+    
+    # 尝试方法 1：cat → openssl → gunzip → tar（假设有 gzip 压缩）
+    log_info "尝试解密（带 gzip 解压）..."
+    if cat container.enc.* | \
+       openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
+       gunzip | \
+       tar -xf -; then
+        log_success "解密和解压完成"
+    else
+        # 方法 1 失败，尝试方法 2：cat → openssl → tar（无 gzip 压缩）
+        log_warning "带 gzip 解压失败，尝试无压缩模式..."
         
-        # 尝试方法 1：cat → openssl → gunzip → tar（假设有 gzip 压缩）
-        log_info "尝试解密（带 gzip 解压）..."
+        # 清理可能的部分解压文件
+        rm -f ark.tar data.tar 2>/dev/null || true
+        
         if cat container.enc.* | \
            openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
-           gunzip | \
            tar -xf -; then
-            log_success "解密和解压完成"
+            log_success "解密和解压完成（无压缩模式）"
         else
-            # 方法 1 失败，尝试方法 2：cat → openssl → tar（无 gzip 压缩）
-            log_warning "带 gzip 解压失败，尝试无压缩模式..."
-            
-            # 清理可能的部分解压文件
-            rm -f ark.tar data.tar 2>/dev/null || true
-            
-            if cat container.enc.* | \
-               openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
-               tar -xf -; then
-                log_success "解密和解压完成（无压缩模式）"
-            else
-                log_error "解密失败！"
-                log_error "可能的原因："
-                log_error "  1. 密码错误"
-                log_error "  2. 文件损坏"
-                log_error "  3. 分卷文件不完整"
-                exit 1
-            fi
-        fi
-    else
-        # 7z 格式（旧格式）
-        log_info "使用 7z 解密（这可能需要 8-12 分钟）..."
-        
-        if ! 7z x -p"$ENCRYPTION_KEY" -y container.7z.001 > /dev/null 2>&1; then
-            log_error "解压失败！"
+            log_error "解密失败！"
             log_error "可能的原因："
             log_error "  1. 密码错误"
             log_error "  2. 文件损坏"
             log_error "  3. 分卷文件不完整"
             exit 1
         fi
-        
-        log_success "解压完成"
     fi
     
     # 检查是否成功解压
@@ -337,7 +300,7 @@ extract_and_decrypt() {
 cleanup_temp_files() {
     log_info "清理临时文件..."
     
-    rm -f container.7z.* container.enc.* 2>/dev/null || true
+    rm -f container.enc.* 2>/dev/null || true
     
     log_success "清理完成"
 }

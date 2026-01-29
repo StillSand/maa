@@ -2,6 +2,15 @@ name: Restore from Cache
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        description: '数据源'
+        required: true
+        default: 'cache'
+        type: choice
+        options:
+          - cache
+          - release
 
 jobs:
   restore:
