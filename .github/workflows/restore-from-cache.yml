@@ -34,17 +34,20 @@ jobs:
       - name: 安装依赖
         run: |
           sudo apt update > /dev/null 2>&1
-          sudo apt install -y p7zip-full gh > /dev/null 2>&1
+          sudo apt install -y gh > /dev/null 2>&1
       
       - name: 压缩加密
         env:
           ENCRYPTION_KEY: ${{ secrets.CONTAINER_ENCRYPTION_KEY }}
         run: |
           echo "开始压缩和加密..."
-          7z a -p"$ENCRYPTION_KEY" -v1900m -mhe=on -mx=0 -mmt=on container.7z ark.tar data.tar
+          tar -cf - ark.tar data.tar | \
+            gzip -1 | \
+            openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
+            split -b 1900m -d -a 3 - container.enc.
           
           echo "生成的文件："
-          ls -lh container.7z.* | awk '{print $9 " (" $5 ")"}'
+          ls -lh container.enc.* | awk '{print $9 " (" $5 ")"}'
       
       - name: 创建 Release
         env:
@@ -54,8 +57,8 @@ jobs:
           echo "创建 Release: $RELEASE_TAG"
           
           gh release create "$RELEASE_TAG" \
-            container.7z.* \
+            container.enc.* \
             --title "Container Snapshot $(date -u +%Y-%m-%d\ %H:%M) UTC" \
-            --notes "从 Actions Cache 恢复的备份"
+            --notes "从 Actions Cache 恢复的备份（OpenSSL 加密）"
           
           echo "✅ Release 创建完成: $RELEASE_TAG"

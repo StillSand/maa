@@ -33,12 +33,12 @@ fi
 docker rm redroid > /dev/null 2>&1
 docker rmi redroid/redroid:11.0.0-latest 2>/dev/null || :
 
-# 压缩容器
-echo "🗜️  [4/6] 压缩容器镜像（这可能需要 1-2 分钟）..."
+# 优化容器镜像
+echo "🗜️  [4/6] 优化容器镜像（合并镜像层，这可能需要 1-2 分钟）..."
 if docker-squash -t ark ark > /dev/null 2>&1; then
-    echo "✅ 容器镜像压缩完成"
+    echo "✅ 容器镜像已优化"
 else
-    echo "⚠️  容器压缩失败（将使用未压缩版本）"
+    echo "⚠️  容器优化失败（将使用未优化版本）"
 fi
 
 # 保存容器

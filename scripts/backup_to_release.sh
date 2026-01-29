@@ -11,15 +11,26 @@ source "${SCRIPT_DIR}/common_functions.sh"
 # ==================== 配置 ====================
 ENCRYPTION_KEY="${CONTAINER_ENCRYPTION_KEY}"
 SPLIT_SIZE="1900m"  # 每个分卷大小（GitHub Release 限制 2GB）
-COMPRESSION_LEVEL="0"  # 压缩级别 0-9，0=不压缩（最快）
 SNAPSHOT_PREFIX="snapshot"
+
+# 压缩级别配置（gzip 级别）
+# 0 = 不压缩（最快，2-3分钟，~12GB）
+# 1 = 最快压缩（推荐，3-5分钟，~10GB）
+# 6 = 标准压缩（5-8分钟，~9GB）
+# 9 = 最大压缩（8-12分钟，~8GB）
+COMPRESSION_LEVEL="1"
 
 # ==================== 检查依赖 ====================
 check_dependencies() {
     log_info "检查依赖..."
     
-    # 检查 7z
-    check_command 7z "sudo apt update > /dev/null 2>&1 && sudo apt install -y p7zip-full > /dev/null 2>&1"
+    # 检查必需工具（Ubuntu 自带）
+    for cmd in tar gzip openssl split; do
+        if ! command -v $cmd &> /dev/null; then
+            log_error "未找到 $cmd 命令"
+            exit 1
+        fi
+    done
     
     # 检查 gh (GitHub CLI)
     check_command gh "sudo apt update > /dev/null 2>&1 && sudo apt install -y gh > /dev/null 2>&1"
@@ -69,39 +80,65 @@ compress_and_encrypt() {
     log_info "开始压缩、加密和分卷..."
     
     # 清理旧的分卷文件
-    rm -f container.7z.* 2>/dev/null || true
+    rm -f container.enc.* 2>/dev/null || true
     
-    # 使用 7z 进行压缩、加密和分卷
-    # -p: 密码
-    # -v: 分卷大小
-    # -mhe=on: 加密文件头（连文件名都加密）
-    # -mx: 压缩级别 (0=不压缩, 9=最大压缩)
-    # -mmt: 多线程
-    log_info "压缩参数：级别=$COMPRESSION_LEVEL, 分卷大小=$SPLIT_SIZE"
+    # 显示原始大小
+    ORIGINAL_SIZE=$(du -ch ark.tar data.tar | tail -1 | cut -f1)
+    log_info "原始大小: $ORIGINAL_SIZE"
+    log_info "压缩级别: $COMPRESSION_LEVEL, 分卷大小: $SPLIT_SIZE"
     
-    7z a -p"$ENCRYPTION_KEY" \
-        -v"$SPLIT_SIZE" \
-        -mhe=on \
-        -mx="$COMPRESSION_LEVEL" \
-        -mmt=on \
-        container.7z \
-        ark.tar data.tar
+    # tar → gzip → openssl → split（流式处理）
+    log_info "正在处理（这可能需要 3-6 分钟）..."
+    
+    # 根据压缩级别选择处理方式
+    if [ "$COMPRESSION_LEVEL" = "0" ]; then
+        # 压缩级别 0：不压缩，直接 tar → openssl → split
+        log_info "使用无压缩模式（最快）"
+        if tar -cf - ark.tar data.tar | \
+           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
+           split -b "$SPLIT_SIZE" -d -a 3 - container.enc.; then
+            log_success "加密和分卷完成"
+        else
+            log_error "处理失败"
+            exit 1
+        fi
+    else
+        # 压缩级别 1-9：tar → gzip → openssl → split
+        log_info "使用 gzip 压缩（级别 $COMPRESSION_LEVEL）"
+        if tar -cf - ark.tar data.tar | \
+           gzip -$COMPRESSION_LEVEL | \
+           openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass pass:"$ENCRYPTION_KEY" | \
+           split -b "$SPLIT_SIZE" -d -a 3 - container.enc.; then
+            log_success "压缩、加密和分卷完成"
+        else
+            log_error "处理失败"
+            exit 1
+        fi
+    fi
     
     # 检查是否生成了分卷文件
-    if [ ! -f "container.7z.001" ]; then
-        log_error "压缩失败，未生成分卷文件"
+    if [ ! -f "container.enc.000" ]; then
+        log_error "分卷失败，未生成文件"
         exit 1
     fi
     
     # 统计分卷数量和总大小
-    PART_COUNT=$(ls container.7z.* 2>/dev/null | wc -l)
-    TOTAL_SIZE=$(du -ch container.7z.* | tail -1 | cut -f1)
+    PART_COUNT=$(ls container.enc.* 2>/dev/null | wc -l)
+    FINAL_SIZE=$(du -ch container.enc.* 2>/dev/null | tail -1 | cut -f1)
     
-    log_success "压缩完成：生成 $PART_COUNT 个分卷，总大小 $TOTAL_SIZE"
+    log_success "完成：生成 $PART_COUNT 个分卷，总大小 $FINAL_SIZE"
+    
+    # 显示压缩率
+    ORIGINAL_BYTES=$(du -cb ark.tar data.tar | tail -1 | cut -f1)
+    FINAL_BYTES=$(du -cb container.enc.* | tail -1 | cut -f1)
+    if [ "$ORIGINAL_BYTES" -gt 0 ]; then
+        COMPRESSION_RATIO=$(awk "BEGIN {printf \"%.1f\", (1 - $FINAL_BYTES / $ORIGINAL_BYTES) * 100}")
+        log_info "压缩率: ${COMPRESSION_RATIO}%"
+    fi
     
     # 列出所有分卷
     log_info "分卷列表："
-    ls -lh container.7z.* | awk '{print "  - " $9 " (" $5 ")"}'
+    ls -lh container.enc.* | awk '{print "  - " $9 " (" $5 ")"}'
 }
 
 # ==================== 生成 Release 标签 ====================
@@ -127,13 +164,13 @@ upload_to_release() {
     # 创建 Release 并上传文件
     log_info "创建 Release 并上传文件..."
     gh release create "$RELEASE_TAG" \
-        container.7z.* \
+        container.enc.* \
         --title "Container Snapshot $(date -u +%Y-%m-%d\ %H:%M) UTC" \
         --notes "Automated container backup
-        
-📦 Files: $(ls container.7z.* | wc -l) parts
-💾 Total size: $(du -ch container.7z.* | tail -1 | cut -f1)
-🔒 Encrypted: Yes
+
+📦 Files: $(ls container.enc.* | wc -l) parts
+💾 Total size: $(du -ch container.enc.* | tail -1 | cut -f1)
+🔒 Encryption: OpenSSL AES-256-CBC
 ⏰ Created: $(date -u +%Y-%m-%d\ %H:%M:%S) UTC"
     
     log_success "上传完成：$RELEASE_TAG"
@@ -143,7 +180,7 @@ upload_to_release() {
 cleanup_temp_files() {
     log_info "清理临时文件..."
     
-    rm -f container.7z.* 2>/dev/null || true
+    rm -f container.enc.* 2>/dev/null || true
     
     log_success "清理完成"
 }
