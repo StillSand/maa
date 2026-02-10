@@ -3,11 +3,15 @@ name: MAA
 on:
   workflow_dispatch:
     inputs:
-      manual_setup:
-        description: '手动初始化模式（首次使用或重新登录时勾选）'
-        required: false
-        default: false
-        type: boolean
+      mode:
+        description: '运行模式'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - init
+          - update
 #  schedule:
 #    - cron: '0 5,17 * * *'
 
@@ -62,18 +66,18 @@ jobs:
       - name: 准备环境
         run: prepare_env.sh
 
-      # ==================== 手动初始化模式 ====================
+      # ==================== 手动模式（init/update）====================
       - name: 设置 SSH 调试会话
-        if: github.event.inputs.manual_setup == 'true'
+        if: github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update'
         uses: mxschmitt/action-tmate@v3
         with:
           detached: true
           limit-access-to-actor: false
         timeout-minutes: 60
 
-      # ==================== 自动运行模式：恢复容器 ====================
+      # ==================== 自动/更新模式：恢复容器 ====================
       - name: 恢复容器
-        if: github.event.inputs.manual_setup != 'true'
+        if: github.event.inputs.mode == 'auto' || github.event.inputs.mode == 'update'
         env:
           CONTAINER_ENCRYPTION_KEY: ${{ secrets.CONTAINER_ENCRYPTION_KEY }}
           GH_TOKEN: ${{ github.token }}
@@ -222,9 +226,9 @@ jobs:
           echo ""
           echo "🎉 MAA、游戏和远程访问设置完成"
 
-      # ==================== 手动初始化模式：准备就绪通知 ====================
-      - name: 📤 准备就绪通知
-        if: github.event.inputs.manual_setup == 'true' && vars.SEND_MSG == 'true'
+      # ==================== 手动模式（init/update）：准备就绪通知 ====================
+      - name: 准备就绪通知
+        if: (github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update') && vars.SEND_MSG == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -237,9 +241,9 @@ jobs:
           
           send_telegram.sh "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" "${MESSAGE}"
 
-      # ==================== 手动初始化模式：等待手动设置 ====================
+      # ==================== 手动模式（init/update）：等待手动设置 ====================
       - name: 等待手动设置
-        if: github.event.inputs.manual_setup == 'true'
+        if: github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update'
         timeout-minutes: 240
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -249,9 +253,9 @@ jobs:
           chmod +x /usr/local/bin/create_flag
           wait_manual_setup.sh "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}"
 
-      # ==================== 自动运行模式：运行 MAA ====================
+      # ==================== 自动模式：运行 MAA ====================
       - name: 运行 MAA
-        if: github.event.inputs.manual_setup != 'true'
+        if: github.event.inputs.mode == 'auto'
         id: run_maa
         env:
           MAA_LOG: trace
@@ -259,7 +263,7 @@ jobs:
         run: python3 run.py
 
       - name: 📊 处理报告
-        if: github.event.inputs.manual_setup != 'true' && steps.run_maa.outcome == 'success'
+        if: github.event.inputs.mode == 'auto' && steps.run_maa.outcome == 'success'
         env:
           SEND_MSG: ${{ vars.SEND_MSG }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -267,7 +271,7 @@ jobs:
         run: python3 process_report.py
 
       - name: 📤 发送执行通知
-        if: github.event.inputs.manual_setup != 'true' && always() && vars.SEND_MSG == 'true'
+        if: github.event.inputs.mode == 'auto' && always() && vars.SEND_MSG == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -312,9 +316,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: backup_to_release.sh
 
-      # ==================== 手动初始化模式：完成通知 ====================
+      # ==================== 手动模式（init/update）：完成通知 ====================
       - name: 📤 初始化完成通知
-        if: github.event.inputs.manual_setup == 'true' && always() && vars.SEND_MSG == 'true'
+        if: (github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update') && always() && vars.SEND_MSG == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
