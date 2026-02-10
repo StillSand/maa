@@ -41,11 +41,18 @@ def generate_github_summary(data):
         print("ℹ️  GITHUB_STEP_SUMMARY 环境变量未设置，跳过 GitHub Summary 生成")
         return False
     
+    # 检测是否经过了自动修复
+    was_fixed = os.getenv('WAS_FIXED', 'false').lower() == 'true'
+    
     # 提取日期部分（YYYY-MM-DD）
     start_date = data['start_time'].split()[0] if data['start_time'] != "未知" else None
     
     with open(github_step_summary, 'w', encoding='utf-8') as f:
-        f.write("# 🎮 MAA 执行报告\n\n")
+        if was_fixed:
+            f.write("# 🎮 MAA 执行报告（经过自动修复）\n\n")
+            f.write("> ⚠️ **注意：** 本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n\n")
+        else:
+            f.write("# 🎮 MAA 执行报告\n\n")
         if start_date:
             f.write(f"**📅 执行日期:** {start_date}\n\n")
         f.write("---\n\n")
@@ -78,12 +85,23 @@ def generate_telegram_message(data):
         print("⚠️  TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 未配置，跳过 Telegram 消息生成")
         return False
     
-# 提取日期部分（YYYY-MM-DD）
+    # 检测是否经过了自动修复
+    was_fixed = os.getenv('WAS_FIXED', 'false').lower() == 'true'
+    
+    # 提取日期部分（YYYY-MM-DD）
     start_date = data['start_time'].split()[0] if data['start_time'] != "未知" else None
     formatted_summary = format_for_telegram(data['summary'], start_date)
 
+    # 构建消息标题
+    if was_fixed:
+        title = "🎮 MAA 自动化执行报告（经过自动修复）"
+        fix_notice = "\n⚠️ <b>注意：</b>本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n"
+    else:
+        title = "🎮 MAA 自动化执行报告"
+        fix_notice = ""
+
     # 构建消息
-    message = f"""🎮 MAA 自动化执行报告
+    message = f"""{title}{fix_notice}
 
 📅 <b>执行日期:</b> {start_date if start_date else '未知'}
 

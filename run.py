@@ -6,6 +6,15 @@ import time
 import threading
 import sys
 
+# 导入 MAA 工具模块
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from maa_utils import clear_fix_flag
+
+# 检查是否是修复模式运行（如果是修复后的重跑，不清除标志）
+if os.getenv('MAA_FIX_MODE') != '1':
+    # 正常模式运行，清除修复标志，允许进行一次修复
+    clear_fix_flag()
+
 client_type = os.getenv("CLIENT_TYPE")
 # 超时时间（秒），默认2小时，可通过环境变量配置
 timeout_seconds = int(os.getenv("MAA_TIMEOUT", "7200"))  # 默认 7200 秒 = 2 小时

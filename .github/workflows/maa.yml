@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: '运行模式'
-        required: true
+        description: '运行模式（默认 auto）'
+        required: false
         default: 'auto'
         type: choice
         options:
@@ -263,11 +263,12 @@ jobs:
         run: python3 run.py
 
       - name: 📊 处理报告
-        if: github.event.inputs.mode == 'auto' && steps.run_maa.outcome == 'success'
+        if: github.event.inputs.mode == 'auto' && (steps.run_maa.outcome == 'success' || steps.fix_game_update.outcome == 'success')
         env:
           SEND_MSG: ${{ vars.SEND_MSG }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WAS_FIXED: ${{ steps.fix_game_update.outcome == 'success' }}
         run: python3 process_report.py
 
       - name: 📤 发送执行通知
@@ -277,10 +278,16 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MAA_TIMEOUT: 7200
           RUN_MAA_OUTCOME: ${{ steps.run_maa.outcome }}
+          FIX_OUTCOME: ${{ steps.fix_game_update.outcome }}
         run: |
-          if [ "${RUN_MAA_OUTCOME}" == "success" ]; then
-            # 成功：发送执行报告
-            python3 send_msg.py
+          if [ "${FIX_OUTCOME}" == "success" ]; then
+            # 修复后成功：发送执行报告，并附加修复标记
+            echo "✅ MAA 经过自动修复后成功完成"
+            WAS_FIXED="true" python3 send_msg.py
+          elif [ "${RUN_MAA_OUTCOME}" == "success" ]; then
+            # 直接成功：发送执行报告
+            echo "✅ MAA 直接成功完成"
+            WAS_FIXED="false" python3 send_msg.py
           else
             # 失败：发送超时警告
             MESSAGE="⚠️ <b>MAA 执行失败</b>
