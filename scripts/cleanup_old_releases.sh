@@ -65,13 +65,13 @@ cleanup_old_releases() {
     
     TOTAL_COUNT=$(echo "$RELEASES" | wc -l)
     
-    # 🔒 安全检查：如果总数为0或异常，立即退出
+    # 安全检查：如果总数为0或异常，立即退出
     if [ "$TOTAL_COUNT" -eq 0 ]; then
         log_error "错误：未找到任何 release，中止清理"
         return 1
     fi
     
-    # 🔒 安全检查：如果总数小于等于保留数量，不需要清理
+    # 安全检查：如果总数小于等于保留数量，不需要清理
     if [ "$TOTAL_COUNT" -le "$KEEP_COUNT" ]; then
         log_info "当前只有 $TOTAL_COUNT 个 Release，无需清理"
         log_info "保留的 Release："
@@ -84,7 +84,7 @@ cleanup_old_releases() {
     # 计算需要删除的数量
     DELETE_COUNT=$((TOTAL_COUNT - KEEP_COUNT))
     
-    # 🔒 安全检查：确认删除数量合理
+    # 安全检查：确认删除数量合理
     if [ "$DELETE_COUNT" -ge "$TOTAL_COUNT" ]; then
         log_error "错误：删除数量($DELETE_COUNT) >= 总数($TOTAL_COUNT)，中止清理"
         return 1
@@ -110,7 +110,7 @@ cleanup_old_releases() {
     
     echo ""
     
-    # 🔒 最终安全检查：确认要删除的 release 不在保留列表中
+    # 最终安全检查：确认要删除的 release 不在保留列表中
     log_info "执行安全检查..."
     while read -r tag; do
         [ -n "$tag" ] && {

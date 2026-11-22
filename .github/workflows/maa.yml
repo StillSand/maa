@@ -31,28 +31,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 📋 检查配置状态
+      - name: 检查配置状态
         env:
           CONTAINER_ENCRYPTION_KEY: ${{ secrets.CONTAINER_ENCRYPTION_KEY }}
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WS_SCRCPY_PASSWORD: ${{ secrets.WS_SCRCPY_PASSWORD }}
         run: |
           echo "=========================================="
-          echo "📋 环境配置检查"
+          echo "环境配置检查"
           echo "=========================================="
           echo ""
-          echo "🌍 环境变量："
+          echo "环境变量："
           echo "  TZ: ${{ env.TZ }}"
           echo "  CLIENT_TYPE: ${{ env.CLIENT_TYPE }}"
           echo ""
-          echo "🔐 Secrets 配置状态："
-          [ -n "$CONTAINER_ENCRYPTION_KEY" ] && echo "  ✅ CONTAINER_ENCRYPTION_KEY: 已配置" || echo "  ❌ CONTAINER_ENCRYPTION_KEY: 未配置"
-          [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && echo "  ✅ CLOUDFLARE_TUNNEL_TOKEN: 已配置" || echo "  ⚠️  CLOUDFLARE_TUNNEL_TOKEN: 未配置"
-          [ -n "$TELEGRAM_BOT_TOKEN" ] && echo "  ✅ TELEGRAM_BOT_TOKEN: 已配置" || echo "  ⚠️  TELEGRAM_BOT_TOKEN: 未配置"
-          [ -n "$TELEGRAM_CHAT_ID" ] && echo "  ✅ TELEGRAM_CHAT_ID: 已配置" || echo "  ⚠️  TELEGRAM_CHAT_ID: 未配置"
+          echo "Secrets 配置状态："
+          [ -n "$CONTAINER_ENCRYPTION_KEY" ] && echo "  ✓ CONTAINER_ENCRYPTION_KEY: 已配置" || echo "  ✗ CONTAINER_ENCRYPTION_KEY: 未配置"
+          [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ] && echo "  ✓ CLOUDFLARE_TUNNEL_TOKEN: 已配置" || echo "  ! CLOUDFLARE_TUNNEL_TOKEN: 未配置"
+          [ -n "$TELEGRAM_BOT_TOKEN" ] && echo "  ✓ TELEGRAM_BOT_TOKEN: 已配置" || echo "  ! TELEGRAM_BOT_TOKEN: 未配置"
+          [ -n "$TELEGRAM_CHAT_ID" ] && echo "  ✓ TELEGRAM_CHAT_ID: 已配置" || echo "  ! TELEGRAM_CHAT_ID: 未配置"
+          [ -n "$WS_SCRCPY_PASSWORD" ] && echo "  ✓ WS_SCRCPY_PASSWORD: 已配置" || echo "  ! WS_SCRCPY_PASSWORD: 未配置（远程控制页将不启动）"
           echo ""
-          echo "📊 Variables 配置状态："
+          echo "Variables 配置状态："
           echo "  SEND_MSG: ${{ vars.SEND_MSG || '未配置' }}"
           echo ""
           echo "=========================================="
@@ -67,13 +69,46 @@ jobs:
         run: prepare_env.sh
 
       # ==================== 手动模式（init/update）====================
+      # 注意：tmate 公共服务器已于 2025-07 永久关停，改用 upterm
       - name: 设置 SSH 调试会话
+        id: upterm
         if: github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update'
-        uses: mxschmitt/action-tmate@v3
+        uses: owenthereal/action-upterm@v1
         with:
           detached: true
-          limit-access-to-actor: false
-        timeout-minutes: 60
+          # 只允许触发者（StillSand）在 GitHub 上登记的 SSH 公钥连接
+          limit-access-to-actor: true
+          # 分离模式下，所有步骤结束后会话再保留 60 分钟，失败后也能连进去排查
+          wait-timeout-minutes: 60
+        timeout-minutes: 65
+        continue-on-error: true
+
+      - name: 显示 SSH 连接信息
+        if: github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update'
+        run: |
+          if [ -n "${{ steps.upterm.outputs.ssh-command }}" ]; then
+            {
+              echo "### SSH 连接命令"
+              echo '```bash'
+              echo "${{ steps.upterm.outputs.ssh-command }}"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "✓ SSH 会话已就绪，命令见上方 Summary"
+          else
+            echo "! SSH 会话未启动（不影响后续步骤），可继续用 Cloudflare Tunnel + ws-scrcpy 操作"
+          fi
+
+      - name: 上传 SSH 连接信息
+        if: (github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update') && steps.upterm.outputs.ssh-command != ''
+        run: echo "${{ steps.upterm.outputs.ssh-command }}" > ssh-command.txt
+
+      - name: 保存 SSH 连接信息
+        if: (github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update') && steps.upterm.outputs.ssh-command != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ssh-command
+          path: ssh-command.txt
+          retention-days: 1
 
       # ==================== 自动/更新模式：恢复容器 ====================
       - name: 恢复容器
@@ -85,14 +120,17 @@ jobs:
 
       # ==================== 共同步骤：设置容器 ====================
       - name: 设置容器
+        id: setup_container
         run: setup_container.sh 180
 
       # ==================== 共同步骤：安装 MAA、游戏和远程访问（并行）====================
       - name: 安装 MAA、游戏和远程访问（并行）
         env:
           CLOUDFLARE_TUNNEL_TOKEN: ${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}
+          WS_SCRCPY_PASSWORD: ${{ secrets.WS_SCRCPY_PASSWORD }}
+          WS_SCRCPY_USER: ${{ secrets.WS_SCRCPY_USER }}
         run: |
-          echo "🚀 开始并行安装 MAA、游戏和设置远程访问..."
+          echo "开始并行安装 MAA、游戏和设置远程访问..."
           
           # 后台启动 MAA 安装
           install_maa.sh > maa_install.log 2>&1 &
@@ -106,9 +144,9 @@ jobs:
           setup_tunnel.sh > tunnel_setup.log 2>&1 &
           TUNNEL_PID=$!
           
-          echo "📦 MAA 安装进程 PID: $MAA_PID"
-          echo "🎮 游戏安装进程 PID: $GAME_PID"
-          echo "🔒 远程访问设置进程 PID: $TUNNEL_PID"
+          echo "MAA 安装进程 PID: $MAA_PID"
+          echo "游戏安装进程 PID: $GAME_PID"
+          echo "远程访问设置进程 PID: $TUNNEL_PID"
           echo ""
           
           # 定期显示进度（每5秒）
@@ -121,9 +159,9 @@ jobs:
             # 提取 MAA 安装进度
             if [ "$MAA_RUNNING" == "1" ]; then
               MAA_STATUS=$(tail -1 maa_install.log 2>/dev/null | grep -oE '(下载|解压|安装|更新|验证).*' | head -c 50 || echo "正在安装...")
-              MAA_DISPLAY="🔄 $MAA_STATUS"
+              MAA_DISPLAY="↻ $MAA_STATUS"
             else
-              MAA_DISPLAY="✅ 已完成"
+              MAA_DISPLAY="✓ 已完成"
             fi
             
             # 提取游戏安装进度
@@ -131,17 +169,17 @@ jobs:
               # 尝试提取下载进度百分比
               GAME_PROGRESS=$(tail -10 game_install.log 2>/dev/null | grep -oE '[0-9]+%' | tail -1)
               if [ -n "$GAME_PROGRESS" ]; then
-                GAME_DISPLAY="⬇️  下载中 $GAME_PROGRESS"
+                GAME_DISPLAY=" 下载中 $GAME_PROGRESS"
               else
                 # 检查是否在安装阶段
                 if grep -q "安装成功\|安装完成" game_install.log 2>/dev/null; then
-                  GAME_DISPLAY="🔄 正在完成安装..."
+                  GAME_DISPLAY="↻ 正在完成安装..."
                 else
-                  GAME_DISPLAY="🔄 正在准备..."
+                  GAME_DISPLAY="↻ 正在准备..."
                 fi
               fi
             else
-              GAME_DISPLAY="✅ 已完成"
+              GAME_DISPLAY="✓ 已完成"
             fi
             
             # 提取远程访问设置进度（简化显示）
@@ -151,28 +189,28 @@ jobs:
                 if grep -q "启动 Cloudflare Tunnel" tunnel_setup.log 2>/dev/null; then
                   if grep -q "拉取 ws-scrcpy 镜像" tunnel_setup.log 2>/dev/null; then
                     if grep -q "启动 ws-scrcpy" tunnel_setup.log 2>/dev/null; then
-                      TUNNEL_DISPLAY="🔄 [4/4] 连接 ADB..."
+                      TUNNEL_DISPLAY="↻ [4/4] 连接 ADB..."
                     else
-                      TUNNEL_DISPLAY="🔄 [3/4] 启动远程控制..."
+                      TUNNEL_DISPLAY="↻ [3/4] 启动远程控制..."
                     fi
                   else
-                    TUNNEL_DISPLAY="🔄 [2/4] 下载镜像..."
+                    TUNNEL_DISPLAY="↻ [2/4] 下载镜像..."
                   fi
                 else
-                  TUNNEL_DISPLAY="🔄 [1/4] 启动隧道..."
+                  TUNNEL_DISPLAY="↻ [1/4] 启动隧道..."
                 fi
               else
-                TUNNEL_DISPLAY="🔄 [1/4] 准备环境..."
+                TUNNEL_DISPLAY="↻ [1/4] 准备环境..."
               fi
             else
-              TUNNEL_DISPLAY="✅ 已完成"
+              TUNNEL_DISPLAY="✓ 已完成"
             fi
             
             # 显示进度
-            echo "⏳ [$(date '+%H:%M:%S')] 安装进度："
-            echo "   📦 MAA: $MAA_DISPLAY"
-            echo "   🎮 游戏: $GAME_DISPLAY"
-            echo "   🔒 远程访问: $TUNNEL_DISPLAY"
+            echo "[$(date '+%H:%M:%S')] 安装进度："
+            echo "   MAA: $MAA_DISPLAY"
+            echo "   游戏: $GAME_DISPLAY"
+            echo "   远程访问: $TUNNEL_DISPLAY"
             echo ""
             
             # 检查是否全部完成
@@ -193,38 +231,38 @@ jobs:
           wait $TUNNEL_PID
           TUNNEL_EXIT=$?
           
-          echo "✅ 所有任务已完成，正在检查结果..."
+          echo "✓ 所有任务已完成，正在检查结果..."
           echo ""
           
           # 检查结果
           if [ $MAA_EXIT -ne 0 ]; then
-            echo "❌ MAA 安装失败 (退出码: $MAA_EXIT)"
-            echo "📋 MAA 安装日志："
+            echo "✗ MAA 安装失败 (退出码: $MAA_EXIT)"
+            echo "MAA 安装日志："
             cat maa_install.log
             exit 1
           else
-            echo "✅ MAA 安装成功"
+            echo "✓ MAA 安装成功"
           fi
           
           if [ $GAME_EXIT -ne 0 ]; then
-            echo "❌ 游戏安装失败 (退出码: $GAME_EXIT)"
-            echo "📋 游戏安装日志："
+            echo "✗ 游戏安装失败 (退出码: $GAME_EXIT)"
+            echo "游戏安装日志："
             cat game_install.log
             exit 1
           else
-            echo "✅ 游戏安装成功"
+            echo "✓ 游戏安装成功"
           fi
           
           if [ $TUNNEL_EXIT -ne 0 ]; then
-            echo "⚠️  远程访问设置失败（非致命错误，退出码: $TUNNEL_EXIT）"
-            echo "📋 远程访问日志："
+            echo "! 远程访问设置失败（非致命错误，退出码: $TUNNEL_EXIT）"
+            echo "远程访问日志："
             cat tunnel_setup.log
           else
-            echo "✅ 远程访问设置成功"
+            echo "✓ 远程访问设置成功"
           fi
           
           echo ""
-          echo "🎉 MAA、游戏和远程访问设置完成"
+          echo "MAA、游戏和远程访问设置完成"
 
       # ==================== 手动模式（init/update）：准备就绪通知 ====================
       - name: 准备就绪通知
@@ -233,11 +271,11 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          MESSAGE="✅ <b>准备工作已完成</b>
+          MESSAGE="✓ <b>准备工作已完成</b>
 
-          📱 容器、MAA、游戏已安装完成
+          容器、MAA、游戏已安装完成
           
-          ⏳ <b>下一步：</b>等待你手动登录游戏..."
+          <b>下一步：</b>等待你手动登录游戏..."
           
           send_telegram.sh "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" "${MESSAGE}"
 
@@ -260,9 +298,10 @@ jobs:
         env:
           MAA_LOG: trace
           MAA_TIMEOUT: 7200
+          MAA_TASK_TIMEOUT: 10800
         run: python3 run.py
 
-      - name: 📊 处理报告
+      - name: 处理报告
         if: github.event.inputs.mode == 'auto' && (steps.run_maa.outcome == 'success' || steps.fix_game_update.outcome == 'success')
         env:
           SEND_MSG: ${{ vars.SEND_MSG }}
@@ -271,7 +310,7 @@ jobs:
           WAS_FIXED: ${{ steps.fix_game_update.outcome == 'success' }}
         run: python3 process_report.py
 
-      - name: 📤 发送执行通知
+      - name: 发送执行通知
         if: github.event.inputs.mode == 'auto' && always() && vars.SEND_MSG == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -279,27 +318,32 @@ jobs:
           MAA_TIMEOUT: 7200
           RUN_MAA_OUTCOME: ${{ steps.run_maa.outcome }}
           FIX_OUTCOME: ${{ steps.fix_game_update.outcome }}
+          SETUP_OUTCOME: ${{ steps.setup_container.outcome }}
         run: |
           if [ "${FIX_OUTCOME}" == "success" ]; then
             # 修复后成功：发送执行报告，并附加修复标记
-            echo "✅ MAA 经过自动修复后成功完成"
+            echo "✓ MAA 经过自动修复后成功完成"
             WAS_FIXED="true" python3 send_msg.py
           elif [ "${RUN_MAA_OUTCOME}" == "success" ]; then
             # 直接成功：发送执行报告
-            echo "✅ MAA 直接成功完成"
+            echo "✓ MAA 直接成功完成"
             WAS_FIXED="false" python3 send_msg.py
           else
-            # 失败：发送超时警告
-            MESSAGE="⚠️ <b>MAA 执行失败</b>
+            # 失败：报告实际失败的步骤，不要一律当成 MAA 超时
+            if [ "${SETUP_OUTCOME}" != "success" ]; then
+              FAILED_STEP="设置容器（Android 启动失败）"
+            elif [ "${RUN_MAA_OUTCOME}" != "success" ]; then
+              FAILED_STEP="运行 MAA"
+            else
+              FAILED_STEP="其他步骤"
+            fi
+            MESSAGE="!<b>MAA 执行失败</b>
 
-            ❌ MAA 已超过 ${MAA_TIMEOUT} 秒（$((MAA_TIMEOUT / 3600)) 小时）没有新的日志输出
-            🛑 任务已被自动终止
-            💾 本次缓存不会被保存
+            失败步骤：${FAILED_STEP}
+            日志：https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
 
-            ⏰ 时间：$(date '+%Y-%m-%d %H:%M:%S')
-            
-            💡 提示：可能是游戏卡住或 MAA 遇到无法识别的界面"
-            
+            时间：$(date '+%Y-%m-%d %H:%M:%S')"
+
             send_telegram.sh "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" "${MESSAGE}"
           fi
 
@@ -324,26 +368,26 @@ jobs:
         run: backup_to_release.sh
 
       # ==================== 手动模式（init/update）：完成通知 ====================
-      - name: 📤 初始化完成通知
+      - name: 初始化完成通知
         if: (github.event.inputs.mode == 'init' || github.event.inputs.mode == 'update') && always() && vars.SEND_MSG == 'true'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           if [ "${{ job.status }}" == "success" ]; then
-            MESSAGE="🎉 <b>初始化完成</b>
+            MESSAGE="<b>初始化完成</b>
 
-            ✅ 状态：成功
-            ⏰ 时间：$(date '+%Y-%m-%d %H:%M:%S')
+            ✓ 状态：成功
+            时间：$(date '+%Y-%m-%d %H:%M:%S')
 
-            📝 <b>提示：</b>下次可以直接运行自动化任务"
+            <b>提示：</b>下次可以直接运行自动化任务"
           else
-            MESSAGE="❌ <b>初始化失败</b>
+            MESSAGE="✗ <b>初始化失败</b>
 
-            ⚠️ 状态：失败
-            ⏰ 时间：$(date '+%Y-%m-%d %H:%M:%S')
+            !状态：失败
+            时间：$(date '+%Y-%m-%d %H:%M:%S')
 
-            📋 请查看 GitHub Actions 日志了解详情"
+            请查看 GitHub Actions 日志了解详情"
           fi
           
           send_telegram.sh "${TELEGRAM_BOT_TOKEN}" "${TELEGRAM_CHAT_ID}" "${MESSAGE}"

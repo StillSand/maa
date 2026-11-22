@@ -38,7 +38,7 @@ def generate_github_summary(data):
     """生成 GitHub Actions Summary"""
     github_step_summary = os.getenv('GITHUB_STEP_SUMMARY')
     if not github_step_summary:
-        print("ℹ️  GITHUB_STEP_SUMMARY 环境变量未设置，跳过 GitHub Summary 生成")
+        print("i GITHUB_STEP_SUMMARY 环境变量未设置，跳过 GitHub Summary 生成")
         return False
     
     # 检测是否经过了自动修复
@@ -49,25 +49,25 @@ def generate_github_summary(data):
     
     with open(github_step_summary, 'w', encoding='utf-8') as f:
         if was_fixed:
-            f.write("# 🎮 MAA 执行报告（经过自动修复）\n\n")
-            f.write("> ⚠️ **注意：** 本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n\n")
+            f.write("# MAA 执行报告（经过自动修复）\n\n")
+            f.write("> !**注意：** 本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n\n")
         else:
-            f.write("# 🎮 MAA 执行报告\n\n")
+            f.write("# MAA 执行报告\n\n")
         if start_date:
-            f.write(f"**📅 执行日期:** {start_date}\n\n")
+            f.write(f"**执行日期:** {start_date}\n\n")
         f.write("---\n\n")
         
         # 显示完整的 Summary 部分
         if data['summary']:
-            f.write("## 📊 任务执行详情\n\n")
+            f.write("## 任务执行详情\n\n")
             f.write(format_for_github(data['summary'], start_date))
         else:
             f.write("*无报告信息*\n\n")
         
         f.write("\n---\n\n")
-        f.write(f"🕐 **开始:** {data['start_time']} | 🏁 **结束:** {data['end_time']} | ⏱️ **耗时:** {data['duration']}\n")
+        f.write(f"**开始:** {data['start_time']} | **结束:** {data['end_time']} | **耗时:** {data['duration']}\n")
     
-    print("✅ GitHub Summary 已生成")
+    print("✓ GitHub Summary 已生成")
     return True
 
 def generate_telegram_message(data):
@@ -78,11 +78,11 @@ def generate_telegram_message(data):
     telegram_chat_id = os.getenv('TELEGRAM_CHAT_ID')
     
     if send_msg != 'true':
-        print("ℹ️  SEND_MSG 未启用，跳过 Telegram 消息生成")
+        print("i SEND_MSG 未启用，跳过 Telegram 消息生成")
         return False
     
     if not telegram_bot_token or not telegram_chat_id:
-        print("⚠️  TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 未配置，跳过 Telegram 消息生成")
+        print("! TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID 未配置，跳过 Telegram 消息生成")
         return False
     
     # 检测是否经过了自动修复
@@ -94,20 +94,20 @@ def generate_telegram_message(data):
 
     # 构建消息标题
     if was_fixed:
-        title = "🎮 MAA 自动化执行报告（经过自动修复）"
-        fix_notice = "\n⚠️ <b>注意：</b>本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n"
+        title = "MAA 自动化执行报告（经过自动修复）"
+        fix_notice = "\n!<b>注意：</b>本次执行经过了一次自动修复（游戏资源更新），总耗时较长\n"
     else:
-        title = "🎮 MAA 自动化执行报告"
+        title = "MAA 自动化执行报告"
         fix_notice = ""
 
     # 构建消息
     message = f"""{title}{fix_notice}
 
-📅 <b>执行日期:</b> {start_date if start_date else '未知'}
+<b>执行日期:</b> {start_date if start_date else '未知'}
 
-🕐 <b>开始:</b> {data['start_time']} | 🏁 <b>结束:</b> {data['end_time']} | ⏱️ <b>耗时:</b> {data['duration']}
+<b>开始:</b> {data['start_time']} | <b>结束:</b> {data['end_time']} | <b>耗时:</b> {data['duration']}
 
-📊 <b>任务详情:</b>
+<b>任务详情:</b>
 
 <pre>
 {formatted_summary}
@@ -118,18 +118,18 @@ def generate_telegram_message(data):
     with open('telegram_msg.txt', 'w', encoding='utf-8') as f:
         f.write(message)
     
-    print("✅ Telegram 消息已生成")
+    print("✓ Telegram 消息已生成")
     return True
 
 def main():
     """主函数"""
-    print("📊 开始处理 MAA 报告...")
+    print("开始处理 MAA 报告...")
     
     # 读取 MAA 输出
     data = read_maa_output()
     
     if not data['summary']:
-        print("⚠️ 警告：未找到 MAA 摘要信息")
+        print("!警告：未找到 MAA 摘要信息")
     
     # 生成 GitHub Summary（总是生成，因为这是 GitHub Actions 的功能）
     github_generated = generate_github_summary(data)
@@ -139,9 +139,9 @@ def main():
     
     # 总结
     print("\n" + "="*50)
-    print("📊 报告处理完成")
-    print(f"  GitHub Summary: {'✅ 已生成' if github_generated else '⏭️  已跳过'}")
-    print(f"  Telegram 消息: {'✅ 已生成' if telegram_generated else '⏭️  已跳过'}")
+    print("报告处理完成")
+    print(f"  GitHub Summary: {'✓ 已生成' if github_generated else '» 已跳过'}")
+    print(f"  Telegram 消息: {'✓ 已生成' if telegram_generated else '» 已跳过'}")
     print("="*50)
 
 if __name__ == "__main__":

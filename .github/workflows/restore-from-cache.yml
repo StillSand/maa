@@ -70,4 +70,4 @@ jobs:
             --title "Container Snapshot $(date -u +%Y-%m-%d\ %H:%M) UTC" \
             --notes "从 Actions Cache 恢复的备份（OpenSSL 加密）"
           
-          echo "✅ Release 创建完成: $RELEASE_TAG"
+          echo "✓ Release 创建完成: $RELEASE_TAG"

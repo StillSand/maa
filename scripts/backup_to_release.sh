@@ -168,10 +168,10 @@ upload_to_release() {
         --title "Container Snapshot $(date -u +%Y-%m-%d\ %H:%M) UTC" \
         --notes "Automated container backup
 
-📦 Files: $(ls container.enc.* | wc -l) parts
-💾 Total size: $(du -ch container.enc.* | tail -1 | cut -f1)
-🔒 Encryption: OpenSSL AES-256-CBC
-⏰ Created: $(date -u +%Y-%m-%d\ %H:%M:%S) UTC"
+Files: $(ls container.enc.* | wc -l) parts
+Total size: $(du -ch container.enc.* | tail -1 | cut -f1)
+Encryption: OpenSSL AES-256-CBC
+Created: $(date -u +%Y-%m-%d\ %H:%M:%S) UTC"
     
     log_success "上传完成：$RELEASE_TAG"
 }

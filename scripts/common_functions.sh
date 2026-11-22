@@ -10,19 +10,19 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    echo -e "${BLUE}i $1${NC}"
 }
 
 log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}! $1${NC}"
 }
 
 log_error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}✗ $1${NC}"
 }
 
 # ==================== 列出所有 snapshot Release ====================
@@ -49,7 +49,7 @@ list_snapshot_releases() {
         echo "" >&2
     fi
     
-    # 🔧 关键：使用 tab 作为分隔符，tag 在第 3 列
+    # 关键：使用 tab 作为分隔符，tag 在第 3 列
     set +e
     local releases=$(gh release list --limit 100 2>&1 | awk -F'\t' '{print $3}' | grep "^${prefix}-")
     local grep_exit=$?

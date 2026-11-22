@@ -5,17 +5,17 @@ MAA 任务摘要格式化工具
 
 # 任务类型图标映射
 TASK_ICONS = {
-    '开始唤醒': '🌅',
-    '公开招募': '👥',
-    '自动战斗': '⚔️',
-    '基建换班': '🏭',
-    '信用商店': '🏪',
-    '领取奖励': '🎁',
-    '关闭游戏': '🔚',
-    '访问好友': '👋',
-    '收取信用': '💰',
-    '生息演算': '🧮',
-    '保全派驻': '🛡️',
+    '开始唤醒': '',
+    '公开招募': '',
+    '自动战斗': '',
+    '基建换班': '',
+    '信用商店': '',
+    '领取奖励': '',
+    '关闭游戏': '',
+    '访问好友': '',
+    '收取信用': '',
+    '生息演算': '',
+    '保全派驻': '',
 }
 
 
@@ -71,13 +71,13 @@ def parse_summary(summary_text, start_date=None):
                             # 重新格式化为统一格式
                             # 根据状态显示不同的图标和文本
                             if status == 'Completed':
-                                status_display = '✅ Completed'
+                                status_display = '✓ Completed'
                             elif status == 'Failed':
-                                status_display = '❌ Failed'
+                                status_display = '✗ Failed'
                             else:
-                                status_display = f'⚠️ {status}'
+                                status_display = f'!{status}'
 
-                            title = f"[{task_name_match}] 🕐 {start_time}-{end_time} ({duration}) | {status_display}"
+                            title = f"[{task_name_match}] {start_time}-{end_time} ({duration}) | {status_display}"
                     
                     # 创建新任务
                     current_task = {
@@ -145,9 +145,9 @@ def format_task_details(details, use_table=True):
                         content = parts[1]
                         
                         # 分离稀有度、标签和状态
-                        if '★' in content:
+                        if '' in content:
                             # 找到星号后的第一个空格
-                            first_space = content.find(' ', content.rfind('★') + 1)
+                            first_space = content.find(' ', content.rfind('') + 1)
                             if first_space > 0:
                                 rarity = content[:first_space]
                                 rest = content[first_space+1:]
@@ -155,10 +155,10 @@ def format_task_details(details, use_table=True):
                                 # 分离标签和状态
                                 if ', Recruited' in rest:
                                     tags = rest.replace(', Recruited', '')
-                                    status = '✅ 已招募'
+                                    status = '✓ 已招募'
                                 elif ', Refreshed' in rest:
                                     tags = rest.replace(', Refreshed', '')
-                                    status = '🔄 已刷新'
+                                    status = '↻ 已刷新'
                                 else:
                                     tags = rest
                                     status = '-'
@@ -184,16 +184,16 @@ def format_task_details(details, use_table=True):
                 if 'Recruited' in stat_line and 'times' in stat_line:
                     recruited_count = stat_line.split()[1]
                     if use_table:
-                        formatted.append(f'✅ **已招募**: {recruited_count} 次')
+                        formatted.append(f'✓ **已招募**: {recruited_count} 次')
                     else:
-                        formatted.append(f'✅ 已招募: {recruited_count} 次')
+                        formatted.append(f'✓ 已招募: {recruited_count} 次')
                     i += 1
                 elif 'Refreshed' in stat_line and 'times' in stat_line:
                     refreshed_count = stat_line.split()[1]
                     if use_table:
-                        formatted.append(f'🔄 **已刷新**: {refreshed_count} 次')
+                        formatted.append(f'↻ **已刷新**: {refreshed_count} 次')
                     else:
-                        formatted.append(f'🔄 已刷新: {refreshed_count} 次')
+                        formatted.append(f'↻ 已刷新: {refreshed_count} 次')
                     i += 1
                 else:
                     break
@@ -266,7 +266,7 @@ def format_task_details(details, use_table=True):
 
                 formatted.append('')
                 if use_table:
-                    formatted.append('**📦 总计掉落：**\n')
+                    formatted.append('**总计掉落：**\n')
                     formatted.append('| 物品 | 总数量 |')
                     formatted.append('|------|--------|')
 
@@ -279,7 +279,7 @@ def format_task_details(details, use_table=True):
                             item_count = item_parts[1] if len(item_parts) > 1 else '1'
                             formatted.append(f'| {item_name} | {item_count} |')
                 else:
-                    formatted.append('📦 总计掉落：')
+                    formatted.append('总计掉落：')
                     formatted.append(f'  {total_items_text}')
                 
                 i += 1
@@ -315,15 +315,15 @@ def format_task_details(details, use_table=True):
                     
                     # 美化设施名称
                     facility_icon = {
-                        'Mfg(PureGold)': '🏭 制造站(赤金)',
-                        'Mfg': '🏭 制造站',
-                        'Trade(Money)': '💰 贸易站(龙门币)',
-                        'Trade': '💰 贸易站',
-                        'Power': '⚡ 发电站',
-                        'Control': '🎮 控制中枢',
-                        'Reception': '🏢 会客室',
-                        'Dorm': '🛏️ 宿舍',
-                        'Office': '📋 办公室'
+                        'Mfg(PureGold)': '制造站(赤金)',
+                        'Mfg': '制造站',
+                        'Trade(Money)': '贸易站(龙门币)',
+                        'Trade': '贸易站',
+                        'Power': '发电站',
+                        'Control': '控制中枢',
+                        'Reception': '会客室',
+                        'Dorm': '宿舍',
+                        'Office': '办公室'
                     }.get(facility, facility)
                     
                     if use_table:
@@ -359,7 +359,7 @@ def format_summary(summary_text, start_date=None, platform='github'):
 
     lines = []
     for i, task in enumerate(tasks):
-        icon = TASK_ICONS.get(task['name'], '📋')
+        icon = TASK_ICONS.get(task['name'], '')
 
         if platform == 'github':
             # GitHub 格式：Markdown 表格 + 折叠块
@@ -367,7 +367,7 @@ def format_summary(summary_text, start_date=None, platform='github'):
 
             if task['details']:
                 lines.append("<details open>")
-                lines.append("<summary>📋 详细信息</summary>\n")
+                lines.append("<summary>详细信息</summary>\n")
 
                 formatted_details = format_task_details(task['details'], use_table=True)
                 lines.extend(formatted_details)

@@ -4,7 +4,7 @@
 TELEGRAM_BOT_TOKEN="$1"
 TELEGRAM_CHAT_ID="$2"
 
-echo "📤 发送 SSH 连接信息到 Telegram..."
+echo "发送 SSH 连接信息到 Telegram..."
 
 # 等待 tmate 启动并生成日志
 sleep 10
@@ -37,22 +37,22 @@ if [ -z "$TMATE_SSH" ]; then
 fi
 
 # 构建消息
-MESSAGE="🔐 <b>SSH 调试会话已启动</b>
+MESSAGE="<b>SSH 调试会话已启动</b>
 
-🔗 <b>SSH 连接命令：</b>
+<b>SSH 连接命令：</b>
 <code>${TMATE_SSH}</code>
 
-📋 <b>操作步骤：</b>
-1️⃣ 复制上面的 SSH 命令
-2️⃣ 在你的电脑终端执行该命令
-3️⃣ 连接成功后按 <code>q</code> 键进入终端
-4️⃣ 保持 SSH 连接，等待下一步指示
+<b>操作步骤：</b>
+1复制上面的 SSH 命令
+2在你的电脑终端执行该命令
+3连接成功后按 <code>q</code> 键进入终端
+4保持 SSH 连接，等待下一步指示
 
-⏳ <b>当前状态：</b>正在安装容器和游戏，请稍候...
+<b>当前状态：</b>正在安装容器和游戏，请稍候...
 
-🔒 <b>安全提示：</b>此连接信息仅发送给你，请勿分享
+<b>安全提示：</b>此连接信息仅发送给你，请勿分享
 
-💡 <b>提示：</b>如果上面没有显示 SSH 命令，请查看 GitHub Actions 日志中的 'Setup Debug Session' 步骤"
+<b>提示：</b>如果上面没有显示 SSH 命令，请查看 GitHub Actions 日志中的 'Setup Debug Session' 步骤"
 
 # 发送到 Telegram
 curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -60,5 +60,5 @@ curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" 
     -d text="${MESSAGE}" \
     -d parse_mode="HTML" > /dev/null 2>&1
 
-echo "✅ SSH 信息已发送到 Telegram"
-echo "ℹ️  SSH 命令: ${TMATE_SSH}"
+echo "✓ SSH 信息已发送到 Telegram"
+echo "i SSH 命令: ${TMATE_SSH}"

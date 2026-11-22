@@ -9,8 +9,8 @@ try:
     with open('telegram_msg.txt', 'r', encoding='utf-8') as f:
         message = f.read()
 except FileNotFoundError:
-    print("❌ 错误：未找到 telegram_msg.txt 文件")
-    print("💡 请先运行 process_report.py 生成消息")
+    print("✗ 错误：未找到 telegram_msg.txt 文件")
+    print("请先运行 process_report.py 生成消息")
     exit(1)
 
 # 发送消息
@@ -24,9 +24,9 @@ data = {
 try:
     response = requests.post(url, json=data, timeout=10)
     if response.status_code == 200:
-        print("✅ Message sent to Telegram successfully")
+        print("✓ Message sent to Telegram successfully")
     else:
-        print(f"❌ Failed to send message: {response.status_code}")
+        print(f"✗ Failed to send message: {response.status_code}")
         print(response.text)
 except Exception as e:
-    print(f"❌ Error sending message: {e}")
+    print(f"✗ Error sending message: {e}")

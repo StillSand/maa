@@ -16,19 +16,19 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    echo -e "${BLUE}i $1${NC}"
 }
 
 log_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    echo -e "${GREEN}✓ $1${NC}"
 }
 
 log_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    echo -e "${YELLOW}! $1${NC}"
 }
 
 log_error() {
-    echo -e "${RED}❌ $1${NC}"
+    echo -e "${RED}✗ $1${NC}"
 }
 
 # ==================== 检查依赖 ====================
@@ -71,47 +71,47 @@ check_encryption_key() {
 # ==================== 查找最新的 Release ====================
 find_latest_release() {
     # 所有调试信息输出到 stderr，避免被 $() 捕获
-    echo "ℹ️  查找最新的容器备份..." >&2
+    echo "i 查找最新的容器备份..." >&2
     echo "" >&2
     
     # 调试：检查 gh 命令是否可用
-    echo "ℹ️  调试 [1/4]: 检查 gh 命令..." >&2
+    echo "i 调试 [1/4]: 检查 gh 命令..." >&2
     if command -v gh &> /dev/null; then
-        echo "✅ gh 命令存在: $(which gh)" >&2
-        gh --version >&2 2>&1 || echo "⚠️  无法获取 gh 版本" >&2
+        echo "✓ gh 命令存在: $(which gh)" >&2
+        gh --version >&2 2>&1 || echo "! 无法获取 gh 版本" >&2
     else
-        echo "❌ gh 命令不存在" >&2
+        echo "✗ gh 命令不存在" >&2
         exit 1
     fi
     echo "" >&2
     
     # 调试：检查 GH_TOKEN
-    echo "ℹ️  调试 [2/4]: 检查 GH_TOKEN..." >&2
+    echo "i 调试 [2/4]: 检查 GH_TOKEN..." >&2
     if [ -z "$GH_TOKEN" ]; then
-        echo "❌ GH_TOKEN 未设置" >&2
+        echo "✗ GH_TOKEN 未设置" >&2
         exit 1
     else
-        echo "✅ GH_TOKEN 已设置 (长度: ${#GH_TOKEN})" >&2
+        echo "✓ GH_TOKEN 已设置 (长度: ${#GH_TOKEN})" >&2
     fi
     echo "" >&2
     
     # 调试：显示 gh release list 的输出
-    echo "ℹ️  调试 [3/4]: 列出所有 releases..." >&2
+    echo "i 调试 [3/4]: 列出所有 releases..." >&2
     echo "--- gh release list 输出 (前10个) ---" >&2
     gh release list --limit 10 >&2 2>&1 || {
-        echo "❌ gh release list 命令失败，错误码: $?" >&2
+        echo "✗ gh release list 命令失败，错误码: $?" >&2
         exit 1
     }
     echo "--- 输出结束 ---" >&2
     echo "" >&2
     
     # 调试：提取和过滤过程
-    echo "ℹ️  调试 [4/4]: 查找 snapshot releases..." >&2
+    echo "i 调试 [4/4]: 查找 snapshot releases..." >&2
     echo "  SNAPSHOT_PREFIX = '${SNAPSHOT_PREFIX}'" >&2
     echo "  查找模式 = '^${SNAPSHOT_PREFIX}-'" >&2
     echo "" >&2
     
-    # 🔧 关键修复：使用 tab 作为分隔符，tag 在第 3 列
+    # 关键修复：使用 tab 作为分隔符，tag 在第 3 列
     # 注意：不使用 2>&1，避免 stderr 混入结果
     set +e
     LATEST_RELEASE=$(gh release list --limit 100 2>/dev/null | awk -F'\t' '{print $3}' | grep "^${SNAPSHOT_PREFIX}-" | head -1)
@@ -131,10 +131,10 @@ find_latest_release() {
     # 调试：显示提取结果（清理后）
     echo "--- 提取结果（清理后）---" >&2
     if [ $GREP_EXIT_CODE -eq 0 ] && [ -n "$LATEST_RELEASE" ]; then
-        echo "✅ 找到匹配: [$LATEST_RELEASE]" >&2
+        echo "✓ 找到匹配: [$LATEST_RELEASE]" >&2
         echo "长度: ${#LATEST_RELEASE}" >&2
     else
-        echo "❌ 未找到匹配 (grep exit code: $GREP_EXIT_CODE)" >&2
+        echo "✗ 未找到匹配 (grep exit code: $GREP_EXIT_CODE)" >&2
         echo "所有 release tags:" >&2
         gh release list --limit 100 2>/dev/null | awk -F'\t' '{print "  - " $3}' >&2 || echo "  (无法列出)" >&2
     fi
@@ -142,12 +142,12 @@ find_latest_release() {
     echo "" >&2
     
     if [ -z "$LATEST_RELEASE" ]; then
-        echo "❌ 未找到任何容器备份" >&2
+        echo "✗ 未找到任何容器备份" >&2
         echo "请先运行 Setup workflow 创建初始备份" >&2
         exit 1
     fi
     
-    echo "✅ 找到最新备份：$LATEST_RELEASE" >&2
+    echo "✓ 找到最新备份：$LATEST_RELEASE" >&2
     # 只有这一行输出到 stdout，会被 $() 捕获
     echo "$LATEST_RELEASE"
 }
@@ -185,15 +185,15 @@ download_release_files() {
             gh release download "$release_tag" --pattern "$file" --clobber > /dev/null 2>&1
             if [ -f "$file" ]; then
                 FILE_SIZE=$(ls -lh "$file" 2>/dev/null | awk '{print $5}')
-                echo "✅ $file ($FILE_SIZE)"
+                echo "✓ $file ($FILE_SIZE)"
             else
-                echo "❌ $file 下载失败"
+                echo "✗ $file 下载失败"
             fi
         ) &
     done
     
     # 等待所有下载完成，显示进度
-    echo "⏳ 等待下载完成..."
+    echo "等待下载完成..."
     echo ""
     WAIT_COUNT=0
     while true; do
@@ -206,7 +206,7 @@ download_release_files() {
         fi
         
         # 使用 \r 覆盖当前行，显示实时进度
-        printf "\r   📥 进度: %d/%d 文件，已下载: %s    " "$DOWNLOADED" "$TOTAL_FILES" "$TOTAL_SIZE"
+        printf "\r   进度: %d/%d 文件，已下载: %s    " "$DOWNLOADED" "$TOTAL_FILES" "$TOTAL_SIZE"
         
         if [ "$DOWNLOADED" -eq "$TOTAL_FILES" ]; then
             break
